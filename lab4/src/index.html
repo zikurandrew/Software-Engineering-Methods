@@ -258,7 +258,259 @@
 
 </div>
 
+<script>
+    const isDark = matchMedia('(prefers-color-scheme: dark)').matches;
+    const CHART_BG = '#ffffff';
+    const GRID_C = '#dbe4ee';
+    const AXIS_C = '#94a3b8';
+    const LABEL_C = '#475569';
 
+    const C_TRUE = '#2563eb';
+    const C_LAG = '#3b82f6';
+    const C_LSM = '#10b981';
+    const C_PT = '#ef476f';
+
+   
+    const X0 = 0, X1 = 2 * Math.PI, RES = 320;
+    const LSM_DEG = {5: 3, 10: 4, 20: 5};
+
+    /**
+     * Цільова функція f(x) = sin(x)
+     */
+    function f(x) {
+        return Math.tanh(x);
+    }
+
+    /**
+     * Генерація вузлів інтерполяції з можливістю додавання шуму
+     */
+    function genPts(n, noise = 0) {
+        return Array.from({length: n}, (_, i) => {
+            const x = X0 + (i / (n - 1)) * (X1 - X0);
+            const noiseVal = (Math.random() * 3) * (noise / 400);
+            return {x, y: f(x) + noiseVal};
+        });
+    }
+
+    /**
+     * Обчислення значення полінома Лагранжа в точці x
+     */
+    function lagAt(pts, x) {
+        return pts.reduce((s, pi, i) => {
+            let L = 1;
+            pts.forEach((pj, j) => {
+                if (j !== i) L *= (x - pj.x) / (pi.x - pj.x);
+            });
+            return s + pi.y * L;
+        }, 0);
+    }
+
+
+    /**
+     * Метод Гаусса для розв'язання СЛАР (Ax = b)
+     * Використовується для знаходження коефіцієнтів МНК
+     */
+    
+
+    /**
+     * Апроксимація методом найменших квадратів (МНК)
+     * Побудова нормальної системи рівнянь та її розв'язання
+     */
+    function fitLSM(pts, deg) {
+        const m = deg + 1;
+        const xs = pts.map(p => p.x);
+        const mn = Math.min(...xs), mx = Math.max(...xs), rng = mx - mn || 1;
+        const sc = pts.map(p => ({x: (p.x - mn) / rng, y: p.y}));
+        const A = Array.from({length: m}, (_, i) => Array.from({length: m}, (_, j) => sc.reduce((s, p) => s + Math.pow(p.x, i + j), 0)));
+        const bv = Array.from({length: m}, (_, i) => sc.reduce((s, p) => s + p.y * Math.pow(p.x, i), 0));
+        const c = gaussElim(A, bv);
+        return x => {
+            const xs = (x - mn) / rng;
+            return c.reduce((s, ci, i) => s + ci * Math.pow(xs, i), 0);
+        };
+    }
+
+    /**
+     * Побудова масиву точок кривої для візуалізації
+     */
+    
+
+    /**
+     * Розрахунок метрик похибки (Max та RMS)
+     */
+    function errStats(fn) {
+        const pts = Array.from({length: 500}, (_, i) => {
+            const x = X0 + (i / 499) * (X1 - X0);
+            return {x, y: f(x)};
+        });
+        const errs = pts.map(p => Math.abs(p.y - fn(p.x)));
+        return {max: Math.max(...errs), rms: Math.sqrt(errs.reduce((s, e) => s + e * e, 0) / 500)};
+    }
+
+    function getDom(arrs, pad = .18) {
+        const vals = arrs.flat().map(p => p.y).filter(isFinite);
+        const mn = Math.min(...vals), mx = Math.max(...vals), rng = mx - mn || 1;
+        return [mn - rng * pad, mx + rng * pad];
+    }
+
+    const DATA = {};
+    [5, 10, 20].forEach(n => {
+        const pts = genPts(n);
+        const deg = LSM_DEG[n];
+        const lFn = x => lagAt(pts, x);
+        const lsmFn = fitLSM(pts, deg);
+        DATA[n] = {
+            pts, deg,
+            trueCurve: buildCurve(f),
+            lagCurve: buildCurve(lFn),
+            lsmCurve: buildCurve(lsmFn),
+            lagErr: errStats(lFn),
+            lsmErr: errStats(lsmFn)
+        };
+    });
+
+    /**
+     * Рендеринг графіка на Canvas
+     */
+    
+
+    /**
+     * Генерація HTML-карток для кожного графіка
+     */
+    function buildCards() {
+        const grid = document.getElementById('chartsGrid');
+        grid.innerHTML = '';
+        [5, 10, 20].forEach(n => {
+            ['lag', 'lsm'].forEach(type => {
+                const d = DATA[n];
+                const err = type === 'lag' ? d.lagErr : d.lsmErr;
+                const cls = type === 'lag' ? 'b-lag' : 'b-lsm';
+                const lbl = type === 'lag' ? 'Лагранж' : 'МНК';
+                const ec = (v) => v < 1e-4 ? 'good' : v < 1e-2 ? 'warn' : 'bad';
+
+                const card = document.createElement('div');
+                card.className = 'c-card';
+                card.dataset.n = String(n);
+                card.dataset.type = type;
+                card.innerHTML = `
+<div class="c-hdr">
+  <span style="display:flex;align-items:center;gap:8px">
+    <span class="m-badge ${cls}">${lbl}</span>
+    <span style="font-size:12px;color:var(--color-text-secondary)">${n} точок${type === 'lsm' ? ` · ст. ${d.deg}` : ` · n-1=${n - 1}`}</span>
+  </span>
+  <span class="err-val">Max |E|: <span class="${ec(err.max)}">${err.max.toExponential(2)}</span></span>
+</div>
+<div style="padding:6px 6px 0;background:var(--color-background-secondary)">
+  <canvas id="cv-${type}-${n}" width="520" height="280" style="width:100%;display:block;border-radius:4px" role="img" aria-label="${lbl} інтерполяція sin(x) з ${n} точками">${lbl} інтерполяція з ${n} точками.</canvas>
+</div>
+<div class="legend-row">
+  <span class="legend-item"><span style="width:20px;height:2px;background:${C_TRUE};display:inline-block;margin-top:1px;border-top:2px dashed ${C_TRUE};background:none"></span>f(x)</span>
+  <span class="legend-item"><span style="width:20px;height:2px;background:${type === 'lag' ? C_LAG : C_LSM};display:inline-block"></span>${lbl}</span>
+  <span class="legend-item"><span style="width:8px;height:8px;border-radius:50%;background:${C_PT};display:inline-block;border:1.5px solid rgba(255,255,255,.5)"></span>Точки</span>
+</div>
+<div class="stat-grid">
+  <div class="stat-cell"><div class="stat-lbl">Max |помилка|</div><div class="stat-num ${ec(err.max)}">${err.max.toExponential(4)}</div></div>
+  <div class="stat-cell"><div class="stat-lbl">RMS помилка</div><div class="stat-num ${ec(err.rms)}">${err.rms.toExponential(4)}</div></div>
+</div>`;
+                grid.appendChild(card);
+            });
+        });
+    }
+
+    
+
+    function applyFilter(n) {
+    const cards = document.querySelectorAll('.c-card');
+
+    cards.forEach(card => {
+        if (n === 'all') {
+            card.style.display = 'block';
+        } else {
+            card.style.display =
+                card.dataset.n === n ? 'block' : 'none';
+        }
+    });
+
+    const grid = document.getElementById('chartsGrid');
+
+    if (n === 'all') {
+        grid.style.gridTemplateColumns = '1fr 1fr';
+    } else {
+        grid.style.gridTemplateColumns = '1fr 1fr';
+    }
+}
+
+
+    document.getElementById('tabs').addEventListener('click', e => {
+        const btn = e.target.closest('.t-btn');
+        if (!btn) return;
+        state.activeN = btn.dataset.n;
+        document.querySelectorAll('.t-btn').forEach(b => b.classList.toggle('active', b === btn));
+        applyFilter(state.activeN);
+    });
+
+    /**
+     * Запуск анімації малювання кривих
+     */
+    document.getElementById('animateBtn').addEventListener('click', () => {
+        if (state.animating) {
+            cancelAnimationFrame(state.raf);
+            state.animating = false;
+            document.getElementById('animateBtn').textContent = '▶ Анімувати';
+            document.getElementById('animBar').style.display = 'none';
+            return;
+        }
+        state.animating = true;
+        state.prog = 0;
+        document.getElementById('animateBtn').textContent = '⏸ Зупинити';
+        document.getElementById('animBar').style.display = 'block';
+        const step = () => {
+            state.prog = Math.min(1, state.prog + .005);
+            document.getElementById('animFill').style.width = (state.prog * 100) + '%';
+            renderAll(state.prog);
+            if (state.prog < 1) state.raf = requestAnimationFrame(step);
+            else {
+                state.animating = false;
+                document.getElementById('animateBtn').textContent = '▶ Анімувати';
+                setTimeout(() => {
+                    document.getElementById('animBar').style.display = 'none';
+                }, 600);
+            }
+        };
+        state.raf = requestAnimationFrame(step);
+    });
+
+    document.getElementById('resetBtn').addEventListener('click', () => {
+        if (state.animating) {
+            cancelAnimationFrame(state.raf);
+            state.animating = false;
+        }
+        state.prog = 1;
+        state.activeN = 'all';
+        state.noise = 0;
+        document.getElementById('noiseRange').value = 0;
+        document.getElementById('noiseVal').textContent = '0%';
+        document.getElementById('animateBtn').textContent = '▶ Анімувати';
+        document.getElementById('animBar').style.display = 'none';
+        document.querySelectorAll('.t-btn').forEach(b => b.classList.toggle('active', b.dataset.n === 'all'));
+        recalculateData();
+        buildCards();
+        applyFilter('all');
+        renderAll(1);
+    });
+
+    document.getElementById('noiseRange').addEventListener('input', e => {
+        state.noise = parseInt(e.target.value);
+        document.getElementById('noiseVal').textContent = state.noise + '%';
+        recalculateData();
+        buildCards();
+        applyFilter(state.activeN);
+        renderAll(state.prog);
+    });
+
+    buildCards();
+    renderAll(1);
+</script>
 
 </body>
 </html>
