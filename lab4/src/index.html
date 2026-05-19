@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Лабораторна робота №4</title>
+</head>
+<body class="theme-dark">
+
+<h2 class="sr-only">ApproxMaster</h2>
+<style>
+    :root {
+    --color-background-base: #f4f7fb;
+    --color-background-primary: #ffffff;
+    --color-background-secondary: #eef3f9;
+
+    --color-background-info: rgba(37, 99, 235, 0.08);
+    --color-background-warning: rgba(59, 130, 246, 0.12);
+    --color-background-success: rgba(16, 185, 129, 0.12);
+
+    --color-border-primary: #dbe4ee;
+    --color-border-secondary: #d3dce6;
+    --color-border-tertiary: #c7d2df;
+    --color-border-info: #2563eb;
+
+    --color-accent-lagrange: #2563eb;
+    --color-accent-lsm: #10b981;
+    --color-accent-original: #1d4ed8;
+    --color-accent-data: #ef476f;
+
+    --color-text-primary: #0f172a;
+    --color-text-secondary: #475569;
+    --color-text-tertiary: #64748b;
+
+    --color-text-info: #2563eb;
+    --color-text-warning: #2563eb;
+    --color-text-success: #10b981;
+    --color-text-danger: #ef4444;
+
+    --font-mono: "Inter", "Segoe UI", sans-serif;
+
+    --border-radius-md: 10px;
+    --border-radius-lg: 18px;
+}
+
+    body {
+        background:
+        radial-gradient(circle at top left, #dbeafe 0%, transparent 35%),
+        radial-gradient(circle at bottom right, #dcfce7 0%, transparent 35%),
+        var(--color-background-base);
+
+        color: var(--color-text-primary);
+        font-family: var(--font-mono);
+        margin: 0;
+        padding: 24px;
+    }
+    .sr-only {
+    text-align: center; 
+}
+
+
+    .t-btn {
+    font-size: 13px;
+    font-weight: 500;
+
+    padding: 8px 16px;
+
+    border: 1px solid var(--color-border-secondary);
+    border-radius: 12px;
+
+    background: #ffffff;
+    color: var(--color-text-secondary);
+
+    cursor: pointer;
+
+    transition:
+        all .18s ease;
+}
+
+    .t-btn:hover {
+    background: #f8fbff;
+    border-color: #93c5fd;
+    color: #2563eb;
+}
+
+    .t-btn.active {
+    background: #2563eb;
+    color: white;
+    border-color: #2563eb;
+
+    box-shadow:
+        0 4px 12px rgba(37, 99, 235, 0.25);
+}
+
+    .c-card {
+    background: rgba(255,255,255,0.92);
+    border: 1px solid var(--color-border-primary);
+    border-radius: var(--border-radius-lg);
+    overflow: hidden;
+
+    box-shadow:
+        0 4px 12px rgba(15, 23, 42, 0.05),
+        0 1px 2px rgba(15, 23, 42, 0.04);
+
+    backdrop-filter: blur(8px);
+
+    transition:
+        transform .18s ease,
+        box-shadow .18s ease;
+}
+
+    .c-card:hover {
+    transform: translateY(-2px);
+
+    box-shadow:
+        0 10px 24px rgba(15, 23, 42, 0.08),
+        0 2px 4px rgba(15, 23, 42, 0.05);
+}
+
+    .c-card.dim {
+        opacity: .35
+    }
+
+    .c-hdr {
+        padding: 8px 12px;
+        border-bottom: 0.5px solid var(--color-border-tertiary);
+        display: flex;
+        align-items: center;
+        justify-content: space-between
+    }
+
+    .m-badge {
+        font-size: 11px;
+        font-weight: 500;
+        padding: 2px 8px;
+        border-radius: var(--border-radius-md)
+    }
+
+    .b-lag {
+        background: var(--color-background-warning);
+        color: var(--color-text-warning)
+    }
+
+    .b-lsm {
+        background: var(--color-background-success);
+        color: var(--color-text-success)
+    }
+
+    .err-val {
+        font-size: 12px;
+        color: var(--color-text-secondary);
+        font-family: var(--font-mono)
+    }
+
+    .legend-row {
+        padding: 6px 12px;
+        display: flex;
+        gap: 14px;
+        flex-wrap: wrap
+    }
+
+    .legend-item {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        font-size: 11px;
+        color: var(--color-text-secondary)
+    }
+
+    .stat-grid {
+        display: grid;
+        grid-template-columns:1fr 1fr;
+        gap: 1px;
+        background: var(--color-border-tertiary);
+        border-top: 0.5px solid var(--color-border-tertiary)
+    }
+
+    .stat-cell {
+        background: var(--color-background-primary);
+        padding: 6px 10px
+    }
+
+    .stat-lbl {
+        font-size: 10px;
+        color: var(--color-text-tertiary);
+        margin-bottom: 2px
+    }
+
+    .stat-num {
+        font-size: 12px;
+        font-family: var(--font-mono);
+        font-weight: 500
+    }
+
+    .good {
+        color: var(--color-text-success)
+    }
+
+    .warn {
+        color: var(--color-text-warning)
+    }
+
+    .bad {
+        color: var(--color-text-danger)
+    }
+
+    #animBar {
+        height: 2px;
+        background: var(--color-border-tertiary);
+        overflow: hidden;
+        border-radius: 2px;
+        margin-bottom: 12px;
+        display: none
+    }
+
+    #animFill {
+        height: 100%;
+        background: var(--color-text-info);
+        width: 0%;
+        transition: width .05s
+    }
+
+    canvas {
+    border-radius: 14px;
+}
+</style>
+
+<div style="padding:.5rem 0 1.5rem">
+
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:12px;gap:8px;flex-wrap:wrap">
+        <p style="font-size:13px;color:var(--color-text-secondary);margin:0;line-height:1.5">
+            <strong style="color:var(--color-text-primary)">f(x) = sin(x)</strong>, x ∈ [0, 2π] &nbsp;|&nbsp; Лагранж
+            (точна інтерполяція) &nbsp;·&nbsp; МНК (поліноміальна апроксимація)
+        </p>
+        <div style="display:flex;gap:6px">
+            <div style="display:flex;align-items:center;gap:8px;margin-right:12px;background:var(--color-background-secondary);padding:4px 10px;border-radius:var(--border-radius-md);border:0.5px solid var(--color-border-secondary)">
+                <label for="noiseRange" style="font-size:11px;color:var(--color-text-tertiary);white-space:nowrap">Шум: <span id="noiseVal" style="color:var(--color-text-info);font-family:var(--font-mono);width:30px;display:inline-block">0%</span></label>
+                <input type="range" id="noiseRange" min="0" max="15" value="0" style="width:80px;cursor:pointer">
+            </div>
+            <button id="animateBtn" class="t-btn">▶ Анімувати</button>
+            <button id="resetBtn" class="t-btn">↺ Скинути</button>
+        </div>
+    </div>
+
+    <div id="animBar">
+        <div id="animFill"></div>
+    </div>
+
+    <div id="tabs" style="display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap">
+        <button class="t-btn" data-n="5">5 точок</button>
+        <button class="t-btn" data-n="10">10 точок</button>
+        <button class="t-btn" data-n="20">20 точок</button>
+    </div>
+
+    <div id="chartsGrid" style="display:grid;grid-template-columns:1fr 1fr;gap:10px"></div>
+
+    
+
+</div>
+
+
+
+</body>
+</html>
+
+
