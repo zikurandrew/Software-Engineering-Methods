@@ -310,7 +310,29 @@
      * Метод Гаусса для розв'язання СЛАР (Ax = b)
      * Використовується для знаходження коефіцієнтів МНК
      */
-    
+    function gaussElim(A, b) {
+        const n = b.length;
+        const M = A.map((r, i) => [...r, b[i]]);
+        for (let c = 0; c < n; c++) {
+            let mr = c;
+            for (let r = c + 1; r < n; r++) if (Math.abs(M[r][c]) > Math.abs(M[mr][c])) mr = r;
+            [M[c], M[mr]] = [M[mr], M[c]];
+            const pv = M[c][c];
+            if (Math.abs(pv) < 1e-14) continue;
+            for (let r = c + 1; r < n; r++) {
+                const fac = M[r][c] / pv;
+                for (let k = c; k <= n; k++) M[r][k] -= fac * M[c][k];
+            }
+        }
+        const x = new Array(n).fill(0);
+        for (let i = n - 1; i >= 0; i--) {
+            if (Math.abs(M[i][i]) < 1e-14) continue;
+            x[i] = M[i][n];
+            for (let j = i + 1; j < n; j++) x[i] -= M[i][j] * x[j];
+            x[i] /= M[i][i];
+        }
+        return x;
+    }
 
     /**
      * Апроксимація методом найменших квадратів (МНК)
@@ -333,7 +355,13 @@
     /**
      * Побудова масиву точок кривої для візуалізації
      */
-    
+    function buildCurve(fn) {
+        return Array.from({length: RES + 1}, (_, i) => {
+            const x = X0 + (i / RES) * (X1 - X0);
+            const y = fn(x);
+            return {x, y: isFinite(y) ? y : 0};
+        });
+    }
 
     /**
      * Розрахунок метрик похибки (Max та RMS)
@@ -372,7 +400,111 @@
     /**
      * Рендеринг графіка на Canvas
      */
-    
+    function drawChart(canvas, {title, curves, pts, xDom, yDom, prog = 1}) {
+        const ctx = canvas.getContext('2d');
+        const W = canvas.width, H = canvas.height;
+        const m = {t: 32, r: 14, b: 40, l: 52};
+        const pw = W - m.l - m.r, ph = H - m.t - m.b;
+        const tx = x => m.l + (x - xDom[0]) / (xDom[1] - xDom[0]) * pw;
+        const ty = y => m.t + ph - (y - yDom[0]) / (yDom[1] - yDom[0]) * ph;
+
+        ctx.fillStyle = CHART_BG;
+        ctx.fillRect(0, 0, W, H);
+
+        const ngx = 6, ngy = 5;
+        ctx.strokeStyle = GRID_C;
+        ctx.lineWidth = .8;
+        for (let i = 0; i <= ngx; i++) {
+            const x = m.l + (i / ngx) * pw;
+            ctx.beginPath();
+            ctx.moveTo(x, m.t);
+            ctx.lineTo(x, m.t + ph);
+            ctx.stroke();
+            const xv = xDom[0] + (i / ngx) * (xDom[1] - xDom[0]);
+            ctx.fillStyle = LABEL_C;
+            ctx.font = '9px var(--font-mono,monospace)';
+            ctx.textAlign = 'center';
+            ctx.fillText(xv.toFixed(1), x, m.t + ph + 14);
+        }
+        for (let i = 0; i <= ngy; i++) {
+            const y = m.t + (i / ngy) * ph;
+            ctx.beginPath();
+            ctx.moveTo(m.l, y);
+            ctx.lineTo(m.l + pw, y);
+            ctx.stroke();
+            const yv = yDom[1] - (i / ngy) * (yDom[1] - yDom[0]);
+            ctx.fillStyle = LABEL_C;
+            ctx.font = '9px var(--font-mono,monospace)';
+            ctx.textAlign = 'right';
+            ctx.fillText(yv.toFixed(2), m.l - 4, y + 3);
+        }
+
+        const zy = ty(0);
+        if (zy >= m.t && zy <= m.t + ph) {
+            ctx.strokeStyle = AXIS_C;
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(m.l, zy);
+            ctx.lineTo(m.l + pw, zy);
+            ctx.stroke();
+        }
+
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(m.l, m.t, pw, ph);
+        ctx.clip();
+
+        curves.forEach(({data, color, width = 2, dash = []}) => {
+            const cnt = Math.max(2, Math.floor(data.length * prog));
+            ctx.strokeStyle = color;
+            ctx.lineWidth = width;
+            ctx.setLineDash(dash);
+            ctx.beginPath();
+            for (let i = 0; i < cnt; i++) {
+                const cx = tx(data[i].x), cy = ty(data[i].y);
+                i === 0 ? ctx.moveTo(cx, cy) : ctx.lineTo(cx, cy);
+            }
+            ctx.stroke();
+            ctx.setLineDash([]);
+        });
+
+        ctx.restore();
+
+        pts.forEach(({x, y}) => {
+            const cx = tx(x), cy = ty(y);
+            ctx.beginPath();
+            ctx.arc(cx, cy, 3.8, 0, Math.PI * 2);
+            ctx.fillStyle = C_PT;
+            ctx.fill();
+            ctx.strokeStyle = isDark ? 'rgba(255,255,255,.7)' : 'white';
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
+        });
+
+        ctx.fillStyle = isDark ? 'rgba(230,240,255,.8)' : 'rgba(20,30,60,.75)';
+        ctx.font = 'bold 11px var(--font-sans,sans-serif)';
+        ctx.textAlign = 'center';
+        ctx.fillText(title, W / 2, 18);
+    }
+
+    const state = {activeN: 'all', prog: 1, animating: false, raf: null, noise: 0};
+
+    function recalculateData() {
+        [5, 10, 20].forEach(n => {
+            const pts = genPts(n, state.noise);
+            const deg = LSM_DEG[n];
+            const lFn = x => lagAt(pts, x);
+            const lsmFn = fitLSM(pts, deg);
+            DATA[n] = {
+                pts, deg,
+                trueCurve: buildCurve(f),
+                lagCurve: buildCurve(lFn),
+                lsmCurve: buildCurve(lsmFn),
+                lagErr: errStats(lFn),
+                lsmErr: errStats(lsmFn)
+            };
+        });
+    }
 
     /**
      * Генерація HTML-карток для кожного графіка
@@ -417,7 +549,38 @@
         });
     }
 
-    
+    function renderAll(prog = 1) {
+        [5, 10, 20].forEach(n => {
+            const d = DATA[n];
+            const xDom = [X0 - .3, X1 + .3];
+
+            const lagCv = document.getElementById(`cv-lag-${n}`);
+            if (lagCv) {
+                const yDom = getDom([d.trueCurve, d.lagCurve, d.pts.map(p => ({y: p.y}))]);
+                drawChart(lagCv, {
+                    title: `Лагранж — ${n} точок`,
+                    curves: [
+                        {data: d.trueCurve, color: C_TRUE, width: 1.8, dash: [4, 3]},
+                        {data: d.lagCurve, color: C_LAG, width: 2.2}
+                    ],
+                    pts: d.pts, xDom, yDom, prog
+                });
+            }
+
+            const lsmCv = document.getElementById(`cv-lsm-${n}`);
+            if (lsmCv) {
+                const yDom = getDom([d.trueCurve, d.lsmCurve, d.pts.map(p => ({y: p.y}))]);
+                drawChart(lsmCv, {
+                    title: `МНК — ${n} точок (ступінь ${d.deg})`,
+                    curves: [
+                        {data: d.trueCurve, color: C_TRUE, width: 1.8, dash: [4, 3]},
+                        {data: d.lsmCurve, color: C_LSM, width: 2.2}
+                    ],
+                    pts: d.pts, xDom, yDom, prog
+                });
+            }
+        });
+    }
 
     function applyFilter(n) {
     const cards = document.querySelectorAll('.c-card');
